@@ -44,6 +44,17 @@ struct best_path_item {
   // vector<pos> path_list;
   double f;
 };
+struct open_item {
+  double f;
+  double g;
+  pos p;
+  bool operator<(const open_item &other) const { return f < other.f; }
+  bool operator>(const open_item &other) const { return f > other.f; }
+  bool operator==(const open_item &other) {
+    return f==other.f && g==other.g && p.x == other.p.x && p.y == other.p.y;
+  }
+};
+
 
 // For converting back and forth between radians and degrees.
 constexpr double pi() { return M_PI; }
@@ -296,17 +307,7 @@ path search_path(vector<vector<bool>> map, int lane, path prev_path) {
   // best_path_map (yes) (maybe these two can be in the same?)
   // open_set (yes) a queue of starts to try
   //
-  struct open_item {
-    double f;
-    double g;
-    int x;
-    int y;
-    bool operator<(const open_item &other) const { return f < other.f; }
-    bool operator>(const open_item &other) const { return f > other.f; }
-    bool operator==(const open_item &other) {
-      return f==other.f && g==other.g && x == other.x && y == other.y;
-    }
-  };
+
 
   int max_x = map.size();
   int max_y = map[0].size();
@@ -316,6 +317,10 @@ path search_path(vector<vector<bool>> map, int lane, path prev_path) {
   //should we try backwards? i.e try from last ok point as start, and step back until ok?
   //or add heuristic where old path is much lower than other (but still less than straigth)
   path init_path = verify_long_path(prev_path, map,max_x,max_y,lane);
+  if(init_path.to_goal){
+    //if already go to goal, no need to check again.
+   // return init_path;
+  }
   //todo, use this
 
   vector<vector<best_path_item>> best_path_map(max_x, std::vector<best_path_item>(max_y));  // need to init this
@@ -332,7 +337,7 @@ path search_path(vector<vector<bool>> map, int lane, path prev_path) {
   int min_len = 3;
   int max_len = 5;
 
-  open_item start_position = {f, g, x, y};
+  open_item start_position = {f, g, pos {x, y}};
   open_set.insert(start_position);
   pos start_pos = {x, y};
   best_path_map[x][y].best_path.path_list.insert(best_path_map[x][y].best_path.path_list.begin(), start_pos);
@@ -346,8 +351,8 @@ path search_path(vector<vector<bool>> map, int lane, path prev_path) {
     auto current_item = *open_set.begin();
     open_backtrack.insert(open_backtrack.end(), current_item);
     open_set.erase(open_set.begin());
-    x = current_item.x;
-    y = current_item.y;
+    x = current_item.p.x;
+    y = current_item.p.y;
     g = current_item.g;
     f = current_item.f;
     path current_path = best_path_map[x][y].best_path;
@@ -380,15 +385,9 @@ path search_path(vector<vector<bool>> map, int lane, path prev_path) {
            // std::cout << "c " << this_move_ok << " x(+1) " << x << "|" << check_y << "|" << max_x << "|" << max_y << std::endl;
           }
           if (!this_move_ok){
-            if(tmo !=this_move_ok){
-              test_path.path_list[132] = pos {32,23}; // To be removed test olf
-            } //
             break;
           }
         }
-        if(tmo !=this_move_ok){
-          test_path.path_list[132] = pos {32,23}; // to be romesed et osnly
-        } //
        // std::cout << "##################dd";
         if(this_move_ok) {
           int landing_y = y + len;
@@ -419,7 +418,7 @@ path search_path(vector<vector<bool>> map, int lane, path prev_path) {
               this_path.to_goal = true;
               return this_path;
             }
-            open_item this_open = {new_f, new_g, landing_x, landing_y};
+            open_item this_open = {new_f, new_g, pos {landing_x, landing_y}};
             // std::cout << "added new";
             open_set.insert(this_open);
             open_backtrack2.insert(open_backtrack2.end(), this_open);
