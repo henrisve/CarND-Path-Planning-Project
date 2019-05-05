@@ -267,16 +267,18 @@ path verify_long_path(path test_path, vector<vector<bool>> map,int max_x,int max
   //this path takes a long path. and returns the same path as far it was possible to go.
   // if not ok, it will also set to_goal as false
   path new_path;
+  new_path.to_goal=false;
   if(test_path.path_list.size() == 0 || test_path.path_list[0].x != lane){//if empty, return just the start position.
     new_path.path_list.insert(new_path.path_list.end(), pos {lane,0}); 
     return new_path;
   }
 
   pos prev_pos=test_path.path_list[0];
-  new_path.to_goal=false;
+  
   for(int i=1;i < test_path.path_list.size();i++){
     pos p1 = test_path.path_list[i];
-    if(check_step(p1,prev_pos,map)){
+    if(check_step(prev_pos,p1,map)){
+
       new_path.path_list.insert(new_path.path_list.end(), prev_pos); 
       // always stay one behind, this way if we dont get all the way, we start one behind each time!
       // and start search from that, e.g, if we'le 5 steps away, return 4 and search from there, if still cant
@@ -319,7 +321,7 @@ path search_path(vector<vector<bool>> map, int lane, path prev_path) {
   path init_path = verify_long_path(prev_path, map,max_x,max_y,lane);
   if(init_path.to_goal){
     //if already go to goal, no need to check again.
-   // return init_path;
+    return init_path;
   }
   //todo, use this
 
@@ -396,7 +398,7 @@ path search_path(vector<vector<bool>> map, int lane, path prev_path) {
           //  << "," << landing_y << std::endl;
           double new_g = g + len;
           double new_f = new_g + (max_y - landing_y) * 4 +
-                         abs(direction) * (5 + y*5) * (max_len - len + 1);
+                         abs(direction) * (20 + y*5) * (max_len - len + 1);
           // std::cout << "new is " << new_f << " and old " <<
           // best_path_map[landing_x][landing_y].f << std::endl;
           if (new_f < best_path_map[landing_x][landing_y].f ||
