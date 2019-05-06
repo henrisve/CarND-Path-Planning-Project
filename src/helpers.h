@@ -274,18 +274,18 @@ path verify_long_path(path test_path, vector<vector<bool>> map,int max_x,int max
   }
 
   pos prev_pos=test_path.path_list[0];
-  
+  new_path.path_list.insert(new_path.path_list.end(), prev_pos); 
   for(int i=1;i < test_path.path_list.size();i++){
     pos p1 = test_path.path_list[i];
     if(check_step(prev_pos,p1,map)){
 
-      new_path.path_list.insert(new_path.path_list.end(), prev_pos); 
+      new_path.path_list.insert(new_path.path_list.end(), p1);
       // always stay one behind, this way if we dont get all the way, we start one behind each time!
       // and start search from that, e.g, if we'le 5 steps away, return 4 and search from there, if still cant
       // find the next time we go back 3 steps etc.. downside with this is that we may change lane and then back for "no reason"                                                       
       prev_pos=p1;
       if(check_goal(p1,max_y)){
-        new_path.path_list.insert(new_path.path_list.end(), p1);
+        
         new_path.to_goal=true;
         break;
       }
@@ -322,6 +322,10 @@ path search_path(vector<vector<bool>> map, int lane, path prev_path) {
   if(init_path.to_goal){
     //if already go to goal, no need to check again.
     return init_path;
+  }else{
+    // seems to be more problem usinng this. a new method is needed, maybe use it with lower heuristigs?
+    init_path.path_list={pos {lane,0}};
+    //this may give other problems...
   }
   //todo, use this
 
@@ -330,20 +334,35 @@ path search_path(vector<vector<bool>> map, int lane, path prev_path) {
   vector<open_item> open_backtrack;
   vector<open_item> open_backtrack2;
 
-  int y = 0;
-  int x = lane;
-  double g = 1;
-  double f = 999;  // no need to calculate
+
 
   int directions [] = {0,-1, 1};
   int min_len = 3;
-  int max_len = 5;
-
-  open_item start_position = {f, g, pos {x, y}};
-  open_set.insert(start_position);
-  pos start_pos = {x, y};
-  best_path_map[x][y].best_path.path_list.insert(best_path_map[x][y].best_path.path_list.begin(), start_pos);
-  best_path_map[x][y].f = f;
+  int max_len = 4;
+  pos start_pos = init_path.path_list.back();
+  int y = start_pos.y;
+  int x = start_pos.x;
+  double g = 1;
+  double f = 999;  // no need to calculate
+  open_item start_position = {f, g, start_pos};//pos {x, y}};
+  path open_inserts;
+  for(int i=0; i < init_path.path_list.size();i++){
+    //std::cout << "added position do open set: ";
+    //usleep(500);
+    open_inserts.path_list.insert(open_inserts.path_list.end(),init_path.path_list[i]);
+    g=0;//(init_path.path_list.size()-i+1)*100;
+    f=(init_path.path_list.size()-i+1)*1000;
+    open_item start_position = {f, g, init_path.path_list[i]};
+    
+    best_path_map[init_path.path_list[i].x][init_path.path_list[i].y].best_path = open_inserts;
+    best_path_map[init_path.path_list[i].x][init_path.path_list[i].y].f = f ;
+    open_set.insert(start_position);
+    //std::cout << init_path.path_list[i].y << " f:" << f << std::endl;
+  }
+  //
+  //best_path_map[x][y].best_path = init_path;
+  //best_path_map[x][y].best_path.path_list.insert(best_path_map[x][y].best_path.path_list.begin(), start_pos);
+  //best_path_map[x][y].f = f;
   path longest_path;
   double longest_path_len=9999;
   int count = 0;
@@ -355,6 +374,7 @@ path search_path(vector<vector<bool>> map, int lane, path prev_path) {
     open_set.erase(open_set.begin());
     x = current_item.p.x;
     y = current_item.p.y;
+   //#// std::cout << "check from open item at " << y << "," << x << " f:"<<  f << std::endl;
     g = current_item.g;
     f = current_item.f;
     path current_path = best_path_map[x][y].best_path;
@@ -502,7 +522,12 @@ vector<vector<bool>> car_2_map(vector<vector<bool>> map, double car_distance,
   //std::cout << "d: " << check_car_d << " lane: " << lane << " lane_frac: " << lane_frac << std::endl;
   if(lane_frac >= 0.8) lane2++;
   if(lane_frac <= 0.2) lane2--;
- /* if (abs(car_distance) < 7 && (self_lane == lane || self_lane == lane2)) {
+  if(abs(car_distance) < 5 && self_lane != lane ){
+    map[lane][0] = true;
+    map[lane][1] = true;
+    map[lane][3] = true;
+  }
+ /* if ( && (self_lane == lane || self_lane == lane2)) {
     // car is in same lane but close // basically we need to turn quick( or slow down)
     ts = 7; 
     ta = 3;
@@ -584,10 +609,13 @@ vector<vector<bool>> car_2_map(vector<vector<bool>> map, double car_distance,
   for (int t = std::min(int(ts), int(ta)) - size; t <= std::max(int(ts), int(ta)) + size; t++) {
     if (t < map_len && t >= 0) {
       // add longer intervall ()
-      if(!(lane == self_lane && abs(t) < 3))
+      if(!(lane == self_lane && abs(t) < 2)){
         map[lane][t] = true;  // this point will have a colision if doing nothing.
+      }else{
+        std::cout << "didnt draw near car" << t << ":" << lane << ":"<< self_lane << std::endl;
+      }
       if(lane2 !=lane && lane2 >= 0 && lane2 <= 2)
-        if(!(lane == self_lane && abs(t) < 3))
+        if(!(lane2 == self_lane && abs(t) < 2))
           map[lane2][t] = true;  // this point will have a colision if doing nothing.
     }
   }
