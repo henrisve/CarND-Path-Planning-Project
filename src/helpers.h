@@ -2,7 +2,8 @@
 #define HELPERS_H
 
 #include <math.h>
-#include <set>
+//#include <set>
+#include <queue>
 #include <string>
 #include <vector>
 #include <unistd.h> // remove
@@ -48,8 +49,8 @@ struct open_item {
   double f;
   double g;
   pos p;
-  bool operator<(const open_item &other) const { return f < other.f; }
-  bool operator>(const open_item &other) const { return f > other.f; }
+  bool operator<(const open_item &other) const { return f > other.f; }
+  //bool operator>(const open_item &other) const { return f > other.f; }
   bool operator==(const open_item &other) {
     return f==other.f && g==other.g && p.x == other.p.x && p.y == other.p.y;
   }
@@ -310,7 +311,6 @@ path search_path(vector<vector<bool>> map, int lane, path prev_path) {
   // open_set (yes) a queue of starts to try
   //
 
-
   int max_x = map.size();
   int max_y = map[0].size();
 
@@ -326,7 +326,8 @@ path search_path(vector<vector<bool>> map, int lane, path prev_path) {
   //todo, use this
 
   vector<vector<best_path_item>> best_path_map(max_x, std::vector<best_path_item>(max_y));  // need to init this
-  std::set<open_item> open_set;
+  //std::set<open_item> open_set;
+  std::priority_queue<open_item> open_set;
   vector<open_item> open_backtrack;
   vector<open_item> open_backtrack2;
 
@@ -340,7 +341,7 @@ path search_path(vector<vector<bool>> map, int lane, path prev_path) {
   int max_len = 5;
 
   open_item start_position = {f, g, pos {x, y}};
-  open_set.insert(start_position);
+  open_set.push(start_position);
   pos start_pos = {x, y};
   best_path_map[x][y].best_path.path_list.insert(best_path_map[x][y].best_path.path_list.begin(), start_pos);
   best_path_map[x][y].f = f;
@@ -350,9 +351,9 @@ path search_path(vector<vector<bool>> map, int lane, path prev_path) {
   vector<vector<float>> map_s(3, std::vector<float>(30));
   while (!open_set.empty()) {
     count++;
-    auto current_item = *open_set.begin();
+    auto current_item = open_set.top();
     open_backtrack.insert(open_backtrack.end(), current_item);
-    open_set.erase(open_set.begin());
+    open_set.pop();//erase(open_set.begin());
     x = current_item.p.x;
     y = current_item.p.y;
     g = current_item.g;
@@ -398,7 +399,7 @@ path search_path(vector<vector<bool>> map, int lane, path prev_path) {
           //  << "," << landing_y << std::endl;
           double new_g = g + len;
           double new_f = new_g + (max_y - landing_y) * 4 +
-                         abs(direction) * (20 + y*5) * (max_len - len + 1);
+                         abs(direction) * (50 /*+ y*5*/) * (max_len - len + 1);
           // std::cout << "new is " << new_f << " and old " <<
           // best_path_map[landing_x][landing_y].f << std::endl;
           if (new_f < best_path_map[landing_x][landing_y].f ||
@@ -422,7 +423,7 @@ path search_path(vector<vector<bool>> map, int lane, path prev_path) {
             }
             open_item this_open = {new_f, new_g, pos {landing_x, landing_y}};
             // std::cout << "added new";
-            open_set.insert(this_open);
+            open_set.push(this_open);
             open_backtrack2.insert(open_backtrack2.end(), this_open);
           }
         } else {
@@ -434,11 +435,11 @@ path search_path(vector<vector<bool>> map, int lane, path prev_path) {
   std::cout << "failed to find any path" << std::endl;
   /*
   for(auto openit : open_backtrack){
-    std::cout << "(" << openit.x << "," << openit.y << ") f:" <<  openit.f << std::endl;
+    std::cout << "(" << openit.p.x << "," << openit.p.y << ") f:" <<  openit.f << std::endl;
   }
   std::cout << "all open" << std::endl;
   for(auto openit : open_backtrack2){
-    std::cout << "(" << openit.x << "," << openit.y << ") f:" <<  openit.f << std::endl;
+    std::cout << "(" << openit.p.x << "," << openit.p.y << ") f:" <<  openit.f << std::endl;
   }
   std::cout << "make map";
   for (auto &i : map_s)
@@ -490,15 +491,23 @@ vector<vector<bool>> car_2_map(vector<vector<bool>> map, double car_distance,
 
   //Todo. 1. if car from behind us in same lane, dont care for now(maybe inrease speed?)
   //      2. dont allow too close, rather make us turn quick in these case    
-  if ((rel_speed < 0.001 && car_distance > 0) ||
-      (rel_speed > -0.001 && car_distance < 0))
-    return map;
+
   double ts;
   double ta;
   int map_len = map[0].size();
   int lane = floor((check_car_d) / 4);
   double lane_frac = fmod(check_car_d, 4)/4.0;
   int lane2 = lane;
+
+  if (abs(car_distance) < 5 && self_lane != lane){
+    map[lane][0] = true;
+    map[lane][1] = true;
+    map[lane][2] = true;
+  }
+  if ((rel_speed < 0.001 && car_distance > 0) ||
+      (rel_speed > -0.001 && car_distance < 0))
+    return map;
+
   //std::cout << "d: " << check_car_d << " lane: " << lane << " lane_frac: " << lane_frac << std::endl;
   if(lane_frac >= 0.8) lane2++;
   if(lane_frac <= 0.2) lane2--;
