@@ -242,21 +242,17 @@ bool check_step(pos p1, pos p2,vector<vector<bool>> map){
     int ydiff = p2.y-y1;
     int max_x = map.size();
     int max_y = map[0].size();
-   // std::cout << "ja " << x1 << " | " << xdiff << "|" << y1 << "|" << ydiff << std::endl;
     bool this_move_ok = true;
     for (int check_y = y1; check_y <= y1+ydiff; check_y++) {
       // ned to redo:
       if (xdiff == 0) {
         this_move_ok = check_xy_blocker(x1, check_y, max_x, max_y, map);
-     //   std::cout << "A " << this_move_ok << " x " << x1 << "|" << check_y << "|" << max_x << "|" << max_y << std::endl;
       } else if (xdiff == -1) {
         this_move_ok = check_xy_blocker(x1, check_y, max_x, max_y, map) &&
                         check_xy_blocker(x1 - 1, check_y, max_x, max_y, map);
-       // std::cout << "B " << this_move_ok << " x(-1) " << x1 << "|" << check_y << "|" << max_x << "|" << max_y << std::endl;
       } else if (xdiff == 1) {
         this_move_ok = check_xy_blocker(x1, check_y, max_x, max_y, map) &&
                         check_xy_blocker(x1 + 1, check_y, max_x, max_y, map);
-        //std::cout << "C " << this_move_ok << " x(+1) " << x1 << "|" << check_y << "|" << max_x << "|" << max_y << std::endl;
       }
       if (!this_move_ok) return false;
     }
@@ -307,9 +303,7 @@ float calc_time_acel(double accelration,double rel_speed,double car_distance,dou
   if (discriminant > 0) {  //
     x1 = (-rel_speed + sqrt(discriminant)) / (accelration);
     x2 = (-rel_speed - sqrt(discriminant)) / (accelration);
-    //   std::cout << "grr (" << x1 << "|" <<x2<< ")" << std::endl;
   } else {
-    //      std::cout << "oh noo" << discriminant << std::endl;
     x1 = fail_value;
   }
   if (x1 > 0 && x2 > 0)
@@ -324,7 +318,7 @@ float calc_time_acel(double accelration,double rel_speed,double car_distance,dou
 }
 
 
-path search_path(vector<vector<bool>> map, int lane, path prev_path) {
+path search_path(vector<vector<bool>> map, int lane, path prev_path,bool allow_lane_change) {
   /*
    *  This function will calculate the path, based on astar but modified.
    */
@@ -358,9 +352,19 @@ path search_path(vector<vector<bool>> map, int lane, path prev_path) {
   int x = lane;
   double g = 1;
   double f = 999;  // no need to calculate
-
-  int directions [] = {0,-1, 1};
-  int min_len = 2;
+  vector<int> directions;
+  if(allow_lane_change){
+    if(lane == 0){
+      directions = {0,1};
+    }else if(lane == 1){
+      directions = {0,-1,1};
+    }else if(lane == 2){
+      directions = {0,-1};
+    }
+  }else{
+    directions={0};
+  }
+  int min_len = 3;
   int max_len = 7;
 
   open_item start_position = {f, g, pos {x, y}};
@@ -376,58 +380,47 @@ path search_path(vector<vector<bool>> map, int lane, path prev_path) {
     count++;
     auto current_item = open_set.top();
     open_backtrack.insert(open_backtrack.end(), current_item);
-    open_set.pop();//erase(open_set.begin());
+    open_set.pop();
     x = current_item.p.x;
     y = current_item.p.y;
     g = current_item.g;
     f = current_item.f;
     path current_path = best_path_map[x][y].best_path;
     for(int &direction : directions){
-    //for (int direction = -1; direction <= 1; direction++) {
       bool this_move_ok = true;
       for (int len = min_len; len <= max_len; len++) {
         // now we loop over all the x and y to see we can go here or if its
         // blocked
         path test_path;
-        //pos p = {x,y};
         test_path.path_list= {pos {x,y},pos {x+direction,y+len}};
-       
-       // std::cout << "check path from {" << x << "," << y << "} to {" << x+direction << "," << y+len <<"}" << std::endl;
         bool tmo = verify_path(test_path, map,max_x,max_y);
 
         for (int check_y = y; check_y <= y + len; check_y++) {
           // ned to redo:
           if (direction == 0) {
             this_move_ok = check_xy_blocker(x, check_y, max_x, max_y, map);
-           // std::cout << "a " << this_move_ok << " x " << x << "|" << check_y << "|" << max_x << "|" << max_y << std::endl;
           } else if (direction == -1) {
             this_move_ok = check_xy_blocker(x, check_y, max_x, max_y, map) &&
                            check_xy_blocker(x - 1, check_y, max_x, max_y, map);
-           // std::cout << "b " << this_move_ok << " x(-1) " << x << "|" << check_y << "|" << max_x << "|" << max_y << std::endl;
 
           } else if (direction == 1) {
             this_move_ok = check_xy_blocker(x, check_y, max_x, max_y, map) &&
                            check_xy_blocker(x + 1, check_y, max_x, max_y, map);
-           // std::cout << "c " << this_move_ok << " x(+1) " << x << "|" << check_y << "|" << max_x << "|" << max_y << std::endl;
+
           }
           if (!this_move_ok){
             break;
           }
         }
-       // std::cout << "##################dd";
+
         if(this_move_ok) {
           int landing_y = y + len;
           int landing_x = x + direction;
-          //  std::cout << "move ok " << x << "," <<  y << " -> " << landing_x
-          //  << "," << landing_y << std::endl;
           double new_g = g + len;
           double new_f = new_g + (max_y - landing_y) * 4 +
                          abs(direction) * (50 /*+ y*5*/) * (max_len - len + 1);
-          // std::cout << "new is " << new_f << " and old " <<
-          // best_path_map[landing_x][landing_y].f << std::endl;
           if (new_f < best_path_map[landing_x][landing_y].f ||
               best_path_map[landing_x][landing_y].f == 0) {
-            //   std::cout << "old" << best_path_map[x][y].f << std::endl;
             best_path_map[landing_x][landing_y].f = new_f;
 
             pos this_pos = {landing_x, landing_y};
@@ -436,8 +429,7 @@ path search_path(vector<vector<bool>> map, int lane, path prev_path) {
             this_path.path_list.insert(this_path.path_list.end(), this_pos);
             best_path_map[landing_x][landing_y].best_path = this_path;
             if(new_f < longest_path_len){
-              //std::cout << "new best path with score " << new_f << "at" << landing_x<< << << std::endl;
-              longest_path_len = new_f;//landing_y
+              longest_path_len = new_f;
               longest_path = this_path;
             }
             if (check_goal(this_pos,max_y)){
@@ -445,7 +437,6 @@ path search_path(vector<vector<bool>> map, int lane, path prev_path) {
               return this_path;
             }
             open_item this_open = {new_f, new_g, pos {landing_x, landing_y}};
-            // std::cout << "added new";
             open_set.push(this_open);
             open_backtrack2.insert(open_backtrack2.end(), this_open);
           }
@@ -455,35 +446,6 @@ path search_path(vector<vector<bool>> map, int lane, path prev_path) {
       }
     }
   }
-  //std::cout << "failed to find any path" << std::endl;
-  /*
-  for(auto openit : open_backtrack){
-    std::cout << "(" << openit.p.x << "," << openit.p.y << ") f:" <<  openit.f << std::endl;
-  }
-  std::cout << "all open" << std::endl;
-  for(auto openit : open_backtrack2){
-    std::cout << "(" << openit.p.x << "," << openit.p.y << ") f:" <<  openit.f << std::endl;
-  }
-  std::cout << "make map";
-  for (auto &i : map_s)
-    std::fill(i.begin(), i.end(), 0);
-  for(int xx=0;xx<3;xx++){
-    for(int yy=0;yy<30;yy++){
-      map_s[xx][yy] = best_path_map[xx][yy].f;
-    }
-  }
-  //map_s[x][y] = -1;
-  //map_s[landing_x][landing_y] = 9999;
-  std::vector< std::vector<float> >::const_iterator crow;
-  std::vector<float>::const_iterator ccol;
-  std::cout << "## map_s:          #" << std::endl;
-  for (crow = map_s.begin(); crow != map_s.end(); ++crow){
-      for (ccol = crow->begin(); ccol != crow->end(); ++ccol){
-          std::cout << "|";
-          std::cout << *ccol;
-      }
-      std::cout << "##" << std::endl;
-  } */
   return longest_path;
 }
 
@@ -514,7 +476,7 @@ vector<vector<bool>> car_2_map(vector<vector<bool>> map, double car_distance,
   }
   double lane_frac = fmod(check_car_d, 4)/4.0;
   int lane2 = lane;
-  if (abs(car_distance) < 10 && self_lane != lane){
+  if (abs(car_distance) < 15 && self_lane != lane){
     map[lane][0] = true;
     map[lane][1] = true;
     map[lane][2] = true;
@@ -523,7 +485,7 @@ vector<vector<bool>> car_2_map(vector<vector<bool>> map, double car_distance,
   if ((rel_speed < 0.001 && car_distance > 0) ||
       (rel_speed > -0.001 && car_distance < 0))
     return map;
-  //std::cout << "d: " << check_car_d << " lane: " << lane << " lane_frac: " << lane_frac << std::endl;
+
   if(lane_frac >= 0.7) lane2++;
   if(lane_frac <= 0.3) lane2--;
   if(lane2 < 0 || lane2 > 2){
@@ -531,49 +493,21 @@ vector<vector<bool>> car_2_map(vector<vector<bool>> map, double car_distance,
   }
   if(car_distance <= 0 && self_lane == lane ){
     // if behind in same lane, dont care
-
     return map;
-  } else if(false){//(abs(car_distance <= 3) && self_lane != lane ){
-    // if the other car is very near but not same lane
-    for (int t =0; t <= 3; t++) {
-      if (t < 90 && t >= 0) {
-        // add longer intervall ()
-        map[lane][t] = true;
-
-      }
-    }
-  
   } else {
     
     ts = round((car_distance / rel_speed) * resultion_factor); 
-    
-    if(false){//ts <= 4 && ts >= 0){ // too close, probably we still have time to react!
-      ts = 4;
-      ta = 4;
-    }else{
-      // only V, perhaps add a to this!
-      // for the one with a we need to solve the equation 0 = 1/2 A t^2 s + V t
-      // -dist
-      //accelration = 0;
-      if (abs(accelration) > 0.01) {
-        ta=round(calc_time_acel(accelration,rel_speed,car_distance,resultion_factor,ts));
-      } else {
-        ta = ts;
-      }
+    // for the one with a we need to solve the equation 0 = 1/2 A t^2 s + V t
+    if (abs(accelration) > 0.01) {
+      ta=round(calc_time_acel(accelration,rel_speed,car_distance,resultion_factor,ts));
+    } else {
+      ta = ts;
     }
   }
-  //int t = ts;
-  //if (t < 29 && t >= 0) {
-  //    // add longer intervall ()
-  //  map[lane][t] = true;
-  //  map[lane][t+1] = true;
-  //}
   if(car_distance < 0){
       ta = -ta+5;
       ts = -ts+5;
   }
-  //std::cout << "yo (" << ts << "|" << ta << ") : " <<  (check_car_d-2)/4 << " => " << lane << std::endl;
-  //ta = ts;
   if(ta < 0) ta = 0;
   if(ta > map_len) ta = map_len;
   if(ts < 0) ts = 0;
@@ -605,8 +539,6 @@ vector<double> getXYtime(int t, double d, double car_s, float a, float v,
   //                           s =(1/2)a t^2 + v t
 
   double s = car_s + (v * t) / resultion_factor;
-  //double s = car_s + ((1 / 2) * a * t * t + v * t) / resultion_factor;
-  // std::cout << " # t: " << t << ",v:" <<  v << ",s " << s << " # ";
   return getXY(s, d, maps_s, maps_x, maps_y);
 }
 

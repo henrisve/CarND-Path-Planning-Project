@@ -54,33 +54,11 @@ int main() {
     map_waypoints_dx.push_back(d_x);
     map_waypoints_dy.push_back(d_y);
   }
-  /*
-  tk::spline sp_sx;
-  tk::spline sp_sy;
-  sp_sx.set_points(tmp_map_waypoints_s, tmp_map_waypoints_x);
-  sp_sy.set_points(tmp_map_waypoints_s, tmp_map_waypoints_y);
-
-  for(int s=1;s<=6944;s+=5){
-    map_waypoints_x.push_back(sp_sx(s));
-    map_waypoints_y.push_back(sp_sy(s));
-    map_waypoints_s.push_back(s);
-  }*/
-
-  /*
-  std::ofstream myfile ("example.txt");
-  if (myfile.is_open()){
-    for(double ss=0;ss< max_s; ss++){
-     // double ss = 1;
-      vector<double> xydata = getXY(ss, 0, map_waypoints_s, map_waypoints_x, map_waypoints_y);
-      myfile << xydata[0]<< "," << xydata[1] << "\n";
-    }
-    myfile.close();
-  }*/
   // start in lane 1 (as in qa video)
   int lane = 1;
   // reference velocity, less than 50
   double ref_vel = 49.5;//0.224;
- // double target_speed=49.5;&target_speed,
+
   double max_speed=49.5;
   double d_error=0;
   int stay_lane_counter = 0;
@@ -95,8 +73,6 @@ int main() {
   };
 
   double speed_i=0;
-  //double speed_d;
-  //std::map<int, std::pair<float, float>> prev_car_state;
   std::map<int, cars> prev_car_state;
   vector<vector<bool>> map(3, std::vector<bool>(30));  // map of everything within 90 timesteps
   vector<vector<char>> map_s(3, std::vector<char>(30));  // map of everything within 90 meters
@@ -107,7 +83,6 @@ int main() {
   std::chrono::high_resolution_clock::time_point t1 =  std::chrono::high_resolution_clock::now();  // remove one second for first itteration.
   // what will happen the first itteration 
   
-
   h.onMessage([&ref_vel, &map_waypoints_x, &map_waypoints_y, &map_waypoints_s,
                &map_waypoints_dx, &map_waypoints_dy, &lane, &map, &map_s, &t1,
                &prev_car_state, &map_2,&predicted_path,&max_speed,
@@ -238,7 +213,9 @@ int main() {
                 // +10 so we also can see behind
                 map_s[other_car_lane][car_distance + 10] = 'c';  // this point will have a colision if doing nothing.
               }
-              if (other_car_lane == current_lane && car_distance < closest_car_ahead.distance && car_distance > 0){//  TODO    ####  other_car_lane == current_lane &&  #############################################################################################
+              if ((other_car_lane == current_lane || other_car_lane == lane) 
+                   && car_distance < closest_car_ahead.distance 
+                   && car_distance > 0){//  TODO    ####  other_car_lane == current_lane &&  #############################################################################################
                 //car is ahead of us. 
                 closest_car_ahead.car_id = car_id;
                 closest_car_ahead.distance = car_distance;
@@ -247,22 +224,9 @@ int main() {
             }
           }
           // here the map is complete: now do the search:
-         // std::cout << predicted_path.path_list[0].y!=lane)
-          //if(predicted_path.path_list.size() > 2){
-          //  predicted_path.path_list[0].x = current_lane;
-         // }
-          /*if(!predicted_path.to_goal || 
-             !verify_path(predicted_path,map,map.size(),map[0].size()) ||
-             predicted_path.path_list[0].x != current_lane){
-            predicted_path = search_path(map, current_lane);
-          }else{
-            std::cout << "using old path ok" << std::endl;
-          }*/
-          predicted_path = search_path(map, current_lane, predicted_path);
+          predicted_path = search_path(map, current_lane, predicted_path,(stay_lane_counter==0));
           if(!predicted_path.to_goal){
             //same car is blocking us ahead
-            
-
             //calcelate speed to get at distance instead:
             int ref_dist = 10;
             double p=2.5;
@@ -272,44 +236,25 @@ int main() {
            // speed_i += dist_error*i_val;
 
             ref_vel=closest_car_ahead.car_state.v - (dist_error)*p; //- speed_i*i_val;
-            std::cout << "current closest car:" << closest_car_ahead.distance << std::endl;
-            std::cout << "current dist_error" << dist_error << std::endl;
-            std::cout << "current integral" << speed_i << std::endl;
-            std::cout << "current ref_vel:" << ref_vel << std::endl;
-
+            
             if(closest_car_ahead.distance < 10){
-              std::cout << "##################################################################################################holy shit we almost hit someone!!:" << std::endl;
+            //  std::cout << "##################################################################################################holy shit we almost hit someone!!:" << std::endl;
               ref_vel=closest_car_ahead.car_state.v*0.8;
             }
-            //double target_accel= (v2 − u2 ) / 2s            
-            
-            
             //ref_vel=closest_car_ahead.car_state.v;
             if (ref_vel > max_speed) ref_vel = max_speed;
             if (ref_vel < 10) ref_vel = 10;
           }else{
             speed_i=0;
             ref_vel=max_speed;
-          }
-         // if (ref_vel < target_speed-2.7) {
-         //   ref_vel += 0.5;//244;
-         // }else if(ref_vel > target_speed){
-         //   ref_vel -= 0.5;//0.224;
-         // }
-          
-          
-         // }
-          // std::vector<pos>::const_iterator ste;
-          // for(ste = predicted_path.path_list.begin(); ste !=
-          // predicted_path.path_list.end(); ++ste){
-          //  std::cout << *ste.x;
-          // }
-          
-          //std::cout << "best path: " << predicted_path.path_list.size() / 2
-           //         << ": ";
+            if(closest_car_ahead.distance < 5){
+             // std::cout << "##################################################################################################holy shit we almost hit someone!!:" << std::endl;
+              ref_vel=closest_car_ahead.car_state.v*0.8;
+            }
+          }            
+
+
           for (int i = 0; i < predicted_path.path_list.size(); i++) {
-           // std::cout << "(x:" << predicted_path.path_list[i].x
-        //              << ",y:" << predicted_path.path_list[i].y << ")";
             map_2[predicted_path.path_list[i].x]
                  [predicted_path.path_list[i].y] = '0';
           }
@@ -318,8 +263,6 @@ int main() {
               if (map[xx][yy]) map_2[xx][yy] = 'C';
             }
           }
-         // std::cout << std::endl;
-
           // print the map!
           // Note to self: map is where x is time(second), and map_s is where x
           // is s(meter)
@@ -378,23 +321,19 @@ int main() {
             ptsy.push_back(ref_y);
           }
 
-
-
-
           if (predicted_path.path_list.size() > 2 && 
               lane != predicted_path.path_list[1].x && 
-              current_lane != predicted_path.path_list[1].x &&
-              stay_lane_counter == 0){
+              current_lane != predicted_path.path_list[1].x){// move this to the search. i.e dont run into anyone infront!} && stay_lane_counter == 0){
             lane = predicted_path.path_list[1].x;
-            stay_lane_counter = 70; //wait about 2 seconds
+            stay_lane_counter = 80; //wait about 2 seconds
           }      
           std::cout << "current lane" << lane << std::endl;    
           vector<double> next_wp0 =
-              getXY(car_s + 30, (2 + 4 * lane), map_waypoints_s, map_waypoints_x, map_waypoints_y);
+              getXY(car_s + 40, (2 + 4 * lane), map_waypoints_s, map_waypoints_x, map_waypoints_y);
           vector<double> next_wp1 =
-              getXY(car_s + 60, (2 + 4 * lane), map_waypoints_s, map_waypoints_x, map_waypoints_y);
+              getXY(car_s + 80, (2 + 4 * lane), map_waypoints_s, map_waypoints_x, map_waypoints_y);
           vector<double> next_wp2 =
-              getXY(car_s + 90, (2 + 4 * lane), map_waypoints_s, map_waypoints_x, map_waypoints_y);
+              getXY(car_s + 120, (2 + 4 * lane), map_waypoints_s, map_waypoints_x, map_waypoints_y);
           
           ptsx.push_back(next_wp0[0]);
           ptsx.push_back(next_wp1[0]);
@@ -423,6 +362,7 @@ int main() {
           vector<double> next_y_vals;
 
           double prev_pos_x = 0;
+          double prev_pos_y = 0;
           double prev_jerk = 0;
           double prev_jerk_x = 0;
           double prev_accel_x = 0;
@@ -443,15 +383,16 @@ int main() {
             double shift_x = b_x - ref_x;
             double shift_y = b_y - ref_y;
             b_x = (shift_x * cos(0 - ref_yaw) - shift_y * sin(0 - ref_yaw));
-           // b_y = (shift_x * sin(0 - ref_yaw) + shift_y * cos(0 - ref_yaw));
+            b_y = (shift_x * sin(0 - ref_yaw) + shift_y * cos(0 - ref_yaw));
 
-         //   #double this_speed = sqrt(pow(b_x-prev_pos_x,2)+pow(b_y-prev_pos_y,2))/t;
-            double this_speed_x = (b_x-prev_pos_x)/t;
+            double this_speed_x = sqrt(pow(b_x-prev_pos_x,2)+pow(b_y-prev_pos_y,2))/t;
+            //double this_speed_x = (b_x-prev_pos_x)/t;
             //prev_speed_x = (b_x-prev_pos_x)/t;
 
             double this_accel_x = (this_speed_x-prev_speed_x);
             double this_jerk_x = (this_accel_x-prev_accel_x);
             prev_pos_x = b_x;
+            prev_pos_y = b_y;
             prev_jerk_x = this_jerk_x;
             prev_accel_x = this_accel_x;
             prev_speed_x = this_speed_x;
@@ -459,33 +400,32 @@ int main() {
           }
 
           double target_x = 30.0;
-         // if(ptsx.size() > 3){
-         //   target_x = ptsx[2];
-         //   std::cout << "using pssx instead of 30.. : "<< target_x << std::endl;
-         // }
+
           double target_y = s(target_x);
           double target_dist = sqrt((target_x) * (target_x) + (target_y) * (target_y));
 
           double x_add_on = 0;
-          double max_A_x=6;
-          double max_J_x=4;
+          double max_A_x=4; // Todo, calculate the max values based on previous y.
+          double max_J_x=4; // currently these need to be low to not exeed 10 while turning.'
+                            // so by basing them on y. i.e while not turning allow total to
+                            // go thowards 10.
           double speed_metric=ref_vel / 2.24;
           for (int i = 1; i <= 50 - previous_path_x.size(); i++) {
 
             //calculate acceleration and jerk here and smooth if needed!
             double this_max_A_x = prev_accel_x + max_J_x*t;
             double this_min_A_x = prev_accel_x - max_J_x*t;
-            std::cout << "Given the max jerk, the max acc is " << this_max_A_x << " and min:" << this_min_A_x << ":: from prev accel " << prev_accel_x;
+           // std::cout << "Given the max jerk, the max acc is " << this_max_A_x << " and min:" << this_min_A_x << ":: from prev accel " << prev_accel_x;
             this_max_A_x = std::min(this_max_A_x, max_A_x*t);
             this_min_A_x = std::max(this_min_A_x,-max_A_x*t);
-            std::cout << ", however combined with max A, this is now" << this_max_A_x << " or min " << this_min_A_x << std::endl;
+            //std::cout << ", however combined with max A, this is now" << this_max_A_x << " or min " << this_min_A_x << std::endl;
             double max_speed_x = (prev_speed_x + this_max_A_x); // devided by 2 because we have x and y.
             double min_speed_x = (prev_speed_x + this_min_A_x);
             //max_speed = std::min(max_speed,speed_metric);
             
-            std::cout << "This gives us an max speed of " << max_speed_x << " and min " << min_speed_x;
+            //std::cout << "This gives us an max speed of " << max_speed_x << " and min " << min_speed_x << "given last max" << prev_speed_x;
             double speed_x = std::max(std::min(max_speed_x,speed_metric),min_speed_x);
-            std::cout << "which makes us drive at " << speed_x << " refV: " << speed_metric << std::endl;
+            //std::cout << "which makes us drive at " << speed_x << " refV: " << speed_metric << std::endl;
             
             double N = (target_dist / (t * speed_x));
             double x_point = x_add_on + (target_x) / N;
@@ -493,8 +433,6 @@ int main() {
             prev_accel_x = (v_x - prev_speed_x)*t;
             prev_speed_x = v_x;
             prev_pos_x = x_point;
-
-
 
             double y_point = s(x_point);
 
@@ -513,9 +451,6 @@ int main() {
             next_x_vals.push_back(x_point);
             next_y_vals.push_back(y_point);
           } 
-       //   std::cout << std::endl;
-
-
 
           msgJson["next_x"] = next_x_vals;
           msgJson["next_y"] = next_y_vals;
