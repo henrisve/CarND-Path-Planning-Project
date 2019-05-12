@@ -1,6 +1,103 @@
 # CarND-Path-Planning-Project
 Self-Driving Car Engineer Nanodegree Program
    
+![alt text](./image1.jpg)
+
+# path finding
+
+There's many ways to find the path, in general going on highway is rather simple compared to find in for example a parkinglot (but more dangerous).
+One easy approach is to just check all the other cars, and if there's a car x meter in front, but no car to one of the sides, go there. easily done with just some ifs.
+
+However, I wanted to try to search the best path, for this I made some kind of A* but as we can't do quick turns, I instead use longer moves, I will come back to this later, as first we need to create a map.
+
+### Map drawing
+
+The type of map I decided to use have the lanes in one axis, and the other axis is using time.
+the reason for this is that for example cars that are in front but driving the same speed or faster, will never really block us, so to turn for these would be stupid. Furthermore two other cars that for the moment is at the same position, but drive at different speed, will most likely not be next to each other when we catch up with them and as such we could sense early on that we can pass by there, or the opposite, to early see that we will be blocked at a later time, and as such already prepare to slow down.
+
+I also included the acceleration, in the calculation, but as they can go up and down in acceleration quick, using only this can be a bit unsafe, so I decided to make an acceleration car to be longer, and take up the time-space between the time-position calculated with only speed to the position that included acceleration. 
+
+A simple version of the algorithm is as follows:
+```
+for each car:
+    if nearby
+        calculate time until we're at the same position
+        calculate time but also use acceleration
+        on the map, draw a car between these points.
+        extend car further for safety distance
+        if car is about to change lane, draw in both lanes.
+```
+An example of this with 2 cars on the road.
+```
+| | | | | | | | | | | | | | | | | |C|C|C|C|C|C| | | | | | | 
+| | | | | | | | | | | | | |C|C|C|C|C| | | | | | | | | | | | 
+| | | | | | | | | | | | | | | | | | | | | | | | | | | | | | 
+```
+for more details, see [car_2_map() in helpers.h, line 452-527](https://github.com/henrisve/CarND-Path-Planning-Project/blob/ae72438caf1ec2964770e57c27056685727d5d23/src/helpers.h#L452-L527)
+and in [main.cpp, line172-225](https://github.com/henrisve/CarND-Path-Planning-Project/blob/ae72438caf1ec2964770e57c27056685727d5d23/src/main.cpp#L172-L225)
+### Search for path
+
+An mentioned earlier, the path finder uses an A* with various step length, in my case I used a length between 3 and 7. (which should be around 1.5 second to 3.5 second). Besides from this it's pretty much a standard A* with the heuristic function :
+
+```new_g + (max_y - landing_y) * 4 + abs(direction) * 50  * (max_len - len + 1);```
+
+where:
+* new_g : the distance traveled.
+* max_y : the length to the goal.
+* landing_y : the new position in y, here y is the time axis.
+* direction : lane change, can be {-1,0,1}, where -1 is turn left, 0 go straight and 1 turn right.
+* max_len : longest step, in this case 7
+* len : step size used in this case.
+
+So in other words:
+* (max_y - landing_y) * 4 : This will give points towards goal lower value.
+* abs(direction) * 50  : turning is bad, unless we have to do it.
+* (max_len - len + 1) : prefer turns that are longer.
+
+Furthermore, as there's multiple path to the same point, where the first may not be the best, we also keep track of the best path to each position, and if a new
+path is better, we update to this.
+
+To save computation and have less risk that the path jumps between paths, we only calculate a new path if the old path get blocked.
+
+Here's an example using the map above.
+```
+| | | | | | | | | | | | | | | | | |C|C|C|C|C|C| | | | | | | 
+|0| | | | |0| | | | | | | |C|C|C|C|C| | | | | | | | | | | | 
+| | | | | | | | | | | | |0| | | | | | |0| | | | | | |0| | |0
+```
+
+For more details, see [function search_path() in helpers.h, line 321-450](https://github.com/henrisve/CarND-Path-Planning-Project/blob/ae72438caf1ec2964770e57c27056685727d5d23/src/helpers.h#L321-L450)
+
+## Lane change
+
+In my first version I used the output directly from the path finder, however, this turned out to not be as smooth as I hoped, so after lots of tries I decided to step back and simply use the second position in the path as decision for a lane change.
+furthermore as the path finding can be a bit jumpy when lots of cars is around, there's a limit for how often lane changes is allowed.
+this can be found in [main.cpp, line 324-344](https://github.com/henrisve/CarND-Path-Planning-Project/blob/ae72438caf1ec2964770e57c27056685727d5d23/src/main.cpp#L324-L344)
+## Trajectory calrulation
+
+The base of my code was based on the QA given by udacity, so I used a spline that was calculated by 3 points. 
+
+For the calculation of speed I use as input a max acceleration and max jerk, and from these calculate the maximum speed for the next point. however, as this was only using the x values (forward direction), this will exceed these values while changing lanes, as such I went with pretty low values. An improved version could include the sideway acceleration and jerk and as such be able to use full acceleration when needed without exceeding it. 
+
+## Path not found
+
+so, what if we're blocked by the cars ahead? in this case the pathfinder will return the best path found along with a flag to tell us that it's blocked, we will then try to get behind the car that is currently the best choise, this may lead to going back and forth between the lanes as the other cars is pretty stupid and accelerate/deaccelerate rather unpredicted. But hopefully we will be in a spot that will soon open up and we can drive past the cars.
+
+During the time being blocked, we will try to keep a fixed distance from the car ahead using a simple p-regulator, and as soon we have a possible path, we go for it. This can be found in [main.cpp, line 227-254](https://github.com/henrisve/CarND-Path-Planning-Project/blob/ae72438caf1ec2964770e57c27056685727d5d23/src/main.cpp#L227-L254)
+## future improvements. 
+
+* currently we might get hit by a car going very fast from behind, this should be improved in the calculation of the map..
+* use both x and y when calculate the speed, so that we fully can use the allowed acceleration.
+* To be on the safe side, we do slow down sometimes when passing by a car (as we get too close), I added this due to at some points colliding with the car in front after getting out from a blocked scenario.
+* reduce the amount of bad lane change, as we sometimes change lane and then change back soon after. 
+* use a smarter way to predict when other cars is changing lanes (perhaps as was done in the lectures)
+
+
+# INSTRUCTIONS: (old readme)
+
+# CarND-Path-Planning-Project
+Self-Driving Car Engineer Nanodegree Program
+   
 ### Simulator.
 You can download the Term3 Simulator which contains the Path Planning Project from the [releases tab (https://github.com/udacity/self-driving-car-sim/releases/tag/T3_v1.2).  
 
