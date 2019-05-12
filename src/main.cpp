@@ -48,12 +48,13 @@ int main() {
     iss >> s;
     iss >> d_x;
     iss >> d_y;
-    tmp_map_waypoints_x.push_back(x);
-    tmp_map_waypoints_y.push_back(y);
-    tmp_map_waypoints_s.push_back(s);
+    map_waypoints_x.push_back(x);
+    map_waypoints_y.push_back(y);
+    map_waypoints_s.push_back(s);
     map_waypoints_dx.push_back(d_x);
     map_waypoints_dy.push_back(d_y);
   }
+  /*
   tk::spline sp_sx;
   tk::spline sp_sy;
   sp_sx.set_points(tmp_map_waypoints_s, tmp_map_waypoints_x);
@@ -63,7 +64,7 @@ int main() {
     map_waypoints_x.push_back(sp_sx(s));
     map_waypoints_y.push_back(sp_sy(s));
     map_waypoints_s.push_back(s);
-  }
+  }*/
 
   /*
   std::ofstream myfile ("example.txt");
@@ -88,11 +89,17 @@ int main() {
     double v=0;
     double a=0;
     double dist=0;
+    double rel_speed;
+    double time_diff;
+    double acceleration;
   };
+
+  double speed_i=0;
+  //double speed_d;
   //std::map<int, std::pair<float, float>> prev_car_state;
   std::map<int, cars> prev_car_state;
   vector<vector<bool>> map(3, std::vector<bool>(30));  // map of everything within 90 timesteps
-  vector<vector<char>> map_s(3, std::vector<char>(90));  // map of everything within 90 meters
+  vector<vector<char>> map_s(3, std::vector<char>(30));  // map of everything within 90 meters
   vector<vector<char>> map_2(3, std::vector<char>(30));  // map of everything within 90 meters
   path predicted_path = {};
   //using namespace ;
@@ -104,7 +111,7 @@ int main() {
   h.onMessage([&ref_vel, &map_waypoints_x, &map_waypoints_y, &map_waypoints_s,
                &map_waypoints_dx, &map_waypoints_dy, &lane, &map, &map_s, &t1,
                &prev_car_state, &map_2,&predicted_path,&max_speed,
-               &stay_lane_counter, &d_error](uWS::WebSocket<uWS::SERVER> ws,
+               &stay_lane_counter, &d_error,&speed_i](uWS::WebSocket<uWS::SERVER> ws,
                                         char *data, size_t length,
                                         uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
@@ -176,7 +183,7 @@ int main() {
           struct closest_car_ahead{
             int car_id=-1;
             double distance=9999;
-            double speed;
+            cars car_state;
           } closest_car_ahead;
 
           // The sensor_fusion have the following content
@@ -211,30 +218,31 @@ int main() {
                 double speed_r = 0.2;
                 double accel_r = 0.2;
                 double dist_r = 0.5;
-                rel_speed = rel_speed * speed_r + prev_car_state[car_id].v * (1-speed_r);
-                accelration = (rel_speed - prev_car_state[car_id].v);///time_delta;
+                rel_speed = rel_speed * speed_r + prev_car_state[car_id].rel_speed * (1-speed_r);
+                accelration = (rel_speed - prev_car_state[car_id].rel_speed);///time_delta;
                 accelration = (accelration * accel_r + prev_car_state[car_id].a * (1-accel_r));
                 car_distance = car_distance * dist_r + prev_car_state[car_id].dist * (1-dist_r);
               }
-              prev_car_state[car_id].v = rel_speed;
+              prev_car_state[car_id].rel_speed = rel_speed;
+              prev_car_state[car_id].v = check_speed;
               prev_car_state[car_id].a = accelration;
               prev_car_state[car_id].dist = car_distance;
               float check_car_d = sensor_fusion[i][6];
 
               // std::cout << "prui2 " << std::endl;
-              map = car_2_map(map, car_distance, rel_speed, check_car_d, accelration, lane);
+              map = car_2_map(map, car_distance, rel_speed, check_car_d, accelration, current_lane);
               //   std::cout << "prui3 " << std::endl;
               int other_car_lane = round((check_car_d - 2) / 4);
-              if ((car_distance + 10 < 90 && car_distance + 10 >= 0) &&
+              if ((car_distance + 10 < 30 && car_distance + 10 >= 0) &&
                   (other_car_lane >= 0 && other_car_lane <= 2)) {
                 // +10 so we also can see behind
                 map_s[other_car_lane][car_distance + 10] = 'c';  // this point will have a colision if doing nothing.
               }
-              if (other_car_lane == current_lane && car_distance < closest_car_ahead.distance ){
+              if (other_car_lane == current_lane && car_distance < closest_car_ahead.distance && car_distance > 0){//  TODO    ####  other_car_lane == current_lane &&  #############################################################################################
                 //car is ahead of us. 
-                closest_car_ahead.car_id=car_id;
-                closest_car_ahead.distance=car_distance;
-                closest_car_ahead.speed=check_speed;
+                closest_car_ahead.car_id = car_id;
+                closest_car_ahead.distance = car_distance;
+                closest_car_ahead.car_state = prev_car_state[car_id];
               }
             }
           }
@@ -252,15 +260,35 @@ int main() {
           }*/
           predicted_path = search_path(map, current_lane, predicted_path);
           if(!predicted_path.to_goal){
-            //same care is blocking us ahead
-            closest_car_ahead.distance;
-            ref_vel=closest_car_ahead.speed;
+            //same car is blocking us ahead
+            
+
+            //calcelate speed to get at distance instead:
+            int ref_dist = 10;
+            double p=2.5;
+            double p_neg=4.5;
+            //double i_val=0.01;
+            double dist_error = ref_dist-closest_car_ahead.distance;
+           // speed_i += dist_error*i_val;
+
+            ref_vel=closest_car_ahead.car_state.v - (dist_error)*p; //- speed_i*i_val;
+            std::cout << "current closest car:" << closest_car_ahead.distance << std::endl;
+            std::cout << "current dist_error" << dist_error << std::endl;
+            std::cout << "current integral" << speed_i << std::endl;
+            std::cout << "current ref_vel:" << ref_vel << std::endl;
+
+            if(closest_car_ahead.distance < 10){
+              std::cout << "##################################################################################################holy shit we almost hit someone!!:" << std::endl;
+              ref_vel=closest_car_ahead.car_state.v*0.8;
+            }
+            //double target_accel= (v2 − u2 ) / 2s            
+            
+            
+            //ref_vel=closest_car_ahead.car_state.v;
             if (ref_vel > max_speed) ref_vel = max_speed;
             if (ref_vel < 10) ref_vel = 10;
-            //calcelate speed to get at distance instead:
-            
-            //double target_accel= (v2 − u2 ) / 2s
           }else{
+            speed_i=0;
             ref_vel=max_speed;
           }
          // if (ref_vel < target_speed-2.7) {
@@ -268,7 +296,6 @@ int main() {
          // }else if(ref_vel > target_speed){
          //   ref_vel -= 0.5;//0.224;
          // }
-          
           
           
          // }
@@ -360,9 +387,8 @@ int main() {
               stay_lane_counter == 0){
             lane = predicted_path.path_list[1].x;
             stay_lane_counter = 70; //wait about 2 seconds
-
-
-          }          
+          }      
+          std::cout << "current lane" << lane << std::endl;    
           vector<double> next_wp0 =
               getXY(car_s + 30, (2 + 4 * lane), map_waypoints_s, map_waypoints_x, map_waypoints_y);
           vector<double> next_wp1 =
@@ -441,25 +467,25 @@ int main() {
           double target_dist = sqrt((target_x) * (target_x) + (target_y) * (target_y));
 
           double x_add_on = 0;
-          double max_A_x=5;
-          double max_J_x=3;
+          double max_A_x=6;
+          double max_J_x=4;
           double speed_metric=ref_vel / 2.24;
           for (int i = 1; i <= 50 - previous_path_x.size(); i++) {
 
             //calculate acceleration and jerk here and smooth if needed!
             double this_max_A_x = prev_accel_x + max_J_x*t;
             double this_min_A_x = prev_accel_x - max_J_x*t;
-          //  std::cout << "Given the max jerk, the max acc is " << this_max_A_x << " and min:" << this_min_A_x << ":: from prev accel " << prev_accel_x;
+            std::cout << "Given the max jerk, the max acc is " << this_max_A_x << " and min:" << this_min_A_x << ":: from prev accel " << prev_accel_x;
             this_max_A_x = std::min(this_max_A_x, max_A_x*t);
             this_min_A_x = std::max(this_min_A_x,-max_A_x*t);
-            //std::cout << ", however combined with max A, this is now" << this_max_A_x << " or min " << this_min_A_x << std::endl;
+            std::cout << ", however combined with max A, this is now" << this_max_A_x << " or min " << this_min_A_x << std::endl;
             double max_speed_x = (prev_speed_x + this_max_A_x); // devided by 2 because we have x and y.
             double min_speed_x = (prev_speed_x + this_min_A_x);
             //max_speed = std::min(max_speed,speed_metric);
             
-           // std::cout << "This gives us an max speed of " << max_speed_x << " and min " << min_speed_x;
+            std::cout << "This gives us an max speed of " << max_speed_x << " and min " << min_speed_x;
             double speed_x = std::max(std::min(max_speed_x,speed_metric),min_speed_x);
-           // std::cout << "which makes us drive at " << speed_x << " refV: " << speed_metric << std::endl;
+            std::cout << "which makes us drive at " << speed_x << " refV: " << speed_metric << std::endl;
             
             double N = (target_dist / (t * speed_x));
             double x_point = x_add_on + (target_x) / N;

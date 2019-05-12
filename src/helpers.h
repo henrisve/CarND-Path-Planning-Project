@@ -6,7 +6,7 @@
 #include <queue>
 #include <string>
 #include <vector>
-//#include <unistd.h> // remove
+#include <unistd.h> // remove
 #include "spline.h"
 
 // for convenience
@@ -299,6 +299,29 @@ path verify_long_path(path test_path, vector<vector<bool>> map,int max_x,int max
 }
 
 
+float calc_time_acel(double accelration,double rel_speed,double car_distance,double resultion_factor,double fail_value){
+  float x1 = -1;
+  float x2 = -1;
+  double ta;
+  float discriminant = rel_speed * rel_speed - 2 * accelration * -car_distance;
+  if (discriminant > 0) {  //
+    x1 = (-rel_speed + sqrt(discriminant)) / (accelration);
+    x2 = (-rel_speed - sqrt(discriminant)) / (accelration);
+    //   std::cout << "grr (" << x1 << "|" <<x2<< ")" << std::endl;
+  } else {
+    //      std::cout << "oh noo" << discriminant << std::endl;
+    x1 = fail_value;
+  }
+  if (x1 > 0 && x2 > 0)
+    ta = std::min(x1, x2) * resultion_factor;
+  else if (x1 > 0)
+    ta = x1 * resultion_factor;
+  else if (x2 > 0)
+    ta = x2 * resultion_factor;
+  else
+    ta = fail_value;
+  return ta;
+}
 
 
 path search_path(vector<vector<bool>> map, int lane, path prev_path) {
@@ -338,7 +361,7 @@ path search_path(vector<vector<bool>> map, int lane, path prev_path) {
 
   int directions [] = {0,-1, 1};
   int min_len = 2;
-  int max_len = 6;
+  int max_len = 7;
 
   open_item start_position = {f, g, pos {x, y}};
   open_set.push(start_position);
@@ -481,55 +504,42 @@ vector<vector<bool>> car_2_map(vector<vector<bool>> map, double car_distance,
    * a car that may be on the way of changing lane, should be seen as
    * a car taking up 2 lanes
    */
-  // rel_speed: if negative, he drive faster than us, positve, were going to
-  // catch up with him
-
-  // if the other car is going away from us in both direction
-  // std::cout << "dist: " << car_distance << ", speed:"  << rel_speed << ", d:
-  // " << check_car_d
-  //          << "accel: " << accelration << std::endl;
-
-  //Todo. 1. if car from behind us in same lane, dont care for now(maybe inrease speed?)
-  //      2. dont allow too close, rather make us turn quick in these case    
 
   double ts;
   double ta;
   int map_len = map[0].size();
   int lane = floor((check_car_d) / 4);
+  if(lane < 0 || lane > 2){
+    return map; //outer car is outside the track (this only occurs after a crash :D)
+  }
   double lane_frac = fmod(check_car_d, 4)/4.0;
   int lane2 = lane;
-
   if (abs(car_distance) < 10 && self_lane != lane){
     map[lane][0] = true;
     map[lane][1] = true;
     map[lane][2] = true;
   }
+
   if ((rel_speed < 0.001 && car_distance > 0) ||
       (rel_speed > -0.001 && car_distance < 0))
     return map;
-
   //std::cout << "d: " << check_car_d << " lane: " << lane << " lane_frac: " << lane_frac << std::endl;
-  if(lane_frac >= 0.8) lane2++;
-  if(lane_frac <= 0.2) lane2--;
- /* if (abs(car_distance) < 7 && (self_lane == lane || self_lane == lane2)) {
-    // car is in same lane but close // basically we need to turn quick( or slow down)
-    ts = 7; 
-    ta = 3;
-  }else if (abs(car_distance) < 5) {  // abs(rel_speed) < 2 &&
-    ts = 5;                     // if he's next to us
-    ta = 3;
-  } else */
+  if(lane_frac >= 0.7) lane2++;
+  if(lane_frac <= 0.3) lane2--;
+  if(lane2 < 0 || lane2 > 2){
+    lane2 = lane; //outer car is outside the track (this only occurs after a crash :D)
+  }
   if(car_distance <= 0 && self_lane == lane ){
     // if behind in same lane, dont care
+
     return map;
-  //} else  if () {  // rel_speed < 0 && car_distance <= 0)
-    // we drive slower, and hes behind of is
   } else if(false){//(abs(car_distance <= 3) && self_lane != lane ){
     // if the other car is very near but not same lane
     for (int t =0; t <= 3; t++) {
       if (t < 90 && t >= 0) {
         // add longer intervall ()
         map[lane][t] = true;
+
       }
     }
   
@@ -546,29 +556,8 @@ vector<vector<bool>> car_2_map(vector<vector<bool>> map, double car_distance,
       // -dist
       //accelration = 0;
       if (abs(accelration) > 0.01) {
-        float x1 = -1;
-        float x2 = -1;
-        float discriminant = rel_speed * rel_speed - 2 * accelration * -car_distance;
-        if (discriminant > 0) {  //
-          x1 = (-rel_speed + sqrt(discriminant)) / (accelration);
-          x2 = (-rel_speed - sqrt(discriminant)) / (accelration);
-          //   std::cout << "grr (" << x1 << "|" <<x2<< ")" << std::endl;
-        } else {
-          //      std::cout << "oh noo" << discriminant << std::endl;
-          x1 = ts;
-        }
-        if (x1 > 0 && x2 > 0)
-          ta = std::min(x1, x2) * resultion_factor;
-        else if (x1 > 0)
-          ta = x1 * resultion_factor;
-        else if (x2 > 0)
-          ta = x2 * resultion_factor;
-        else
-          ta = ts;
-
-        ta = std::round(ta);
+        ta=round(calc_time_acel(accelration,rel_speed,car_distance,resultion_factor,ts));
       } else {
-        //   std::cout << "acc < min)" << std::endl;
         ta = ts;
       }
     }
@@ -580,8 +569,8 @@ vector<vector<bool>> car_2_map(vector<vector<bool>> map, double car_distance,
   //  map[lane][t+1] = true;
   //}
   if(car_distance < 0){
-      ta = -ta;
-      ts = -ts;
+      ta = -ta+5;
+      ts = -ts+5;
   }
   //std::cout << "yo (" << ts << "|" << ta << ") : " <<  (check_car_d-2)/4 << " => " << lane << std::endl;
   //ta = ts;
@@ -591,7 +580,7 @@ vector<vector<bool>> car_2_map(vector<vector<bool>> map, double car_distance,
   if(ts > map_len) ts = map_len;
   int size=(map_len-((abs(ta)+abs(ts))/2))/10;
   for (int t = std::min(int(ts), int(ta)) - size; t <= std::max(int(ts), int(ta)) + size; t++) {
-    if (t < map_len && t >= 0) {
+    if (t < map_len && t >= 0 && lane >= 0 && lane <= 2) {
       // add longer intervall ()
       if(!(lane == self_lane && abs(t) < 3))
         map[lane][t] = true;  // this point will have a colision if doing nothing.
@@ -620,4 +609,6 @@ vector<double> getXYtime(int t, double d, double car_s, float a, float v,
   // std::cout << " # t: " << t << ",v:" <<  v << ",s " << s << " # ";
   return getXY(s, d, maps_s, maps_x, maps_y);
 }
+
+
 #endif  // HELPERS_H
