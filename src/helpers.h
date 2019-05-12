@@ -150,9 +150,7 @@ vector<double> getFrenet(double x, double y, double theta,
   for (int i = 0; i < prev_wp; ++i) {
     frenet_s += distance(maps_x[i], maps_y[i], maps_x[i + 1], maps_y[i + 1]);
   }
-
   frenet_s += distance(0, 0, proj_x, proj_y);
-
   return {frenet_s, frenet_d};
 }
 
@@ -182,81 +180,7 @@ vector<double> getXY(double s, double d, const vector<double> &maps_s,
 
   return {x, y};
 }
-/*
-vector<double> getXYa(double s, double d, const vector<double> &maps_s,
-                     const vector<double> &maps_x,
-                     const vector<double> &maps_y) {
 
-  double max_s = 6945.554;
-  int prev_wp = -1;
-
-  while (s > maps_s[prev_wp + 1] && (prev_wp < (int)(maps_s.size() - 1))) {
-    ++prev_wp;
-  }
-  int next_wp=prev_wp+1;
-
-
-  int wp2 = (prev_wp + 1) % maps_x.size();
-  vector<double> ptss;
-  vector<double> ptsx;
-  vector<double> ptsy;
-  tk::spline sp_sx;
-  tk::spline sp_sy;
-  double next_s;
-  if(prev_wp<0){
-    next_s=maps_s[maps_x.size()+prev_wp];
-  }else{
-    next_s=maps_s[prev_wp];
-  }
-  
-  for(int i=-5;i<5;i++){
-    int ti = (prev_wp + i);
-    if(ti<0){
-      ti=maps_x.size()+ti;
-    }
-    //std::cout << ti << " : ";
-    int wp = ti % maps_x.size();
-    double this_s = maps_s[wp];
-    if (i < 0 && this_s > next_s) {
-      this_s -= max_s;
-    }
-    if (i > 0 && this_s < next_s) {
-      this_s += max_s;
-    }
-    ptss.push_back(this_s); 
-    ptsx.push_back(maps_x[wp]); 
-    ptsy.push_back(maps_y[wp]);
-  } 
-  
-  sp_sx.set_points(ptss, ptsx);
-  sp_sy.set_points(ptss, ptsy);
-
-  double s_plus = s+0.1;
-  double s_minus =s-0.1;
-  if (s_minus > next_s) {
-    s_minus -= max_s;
-  }
-  if (s_plus < next_s) {
-    s_plus += max_s;
-  }
-
-  double heading = atan2((sp_sy(s_plus) - sp_sy(s_minus)), (sp_sx(s_plus) - sp_sx(s_minus)));
-
-  //double heading = atan2((maps_y[wp2] - maps_y[prev_wp]), (maps_x[wp2] - maps_x[prev_wp]));
-  // the x,y,s along the segment
-  //double seg_s = (s - maps_s[prev_wp]);
-
-  double seg_x = sp_sx(s);//maps_x[prev_wp] + seg_s * cos(heading);
-  double seg_y = sp_sy(s);//maps_y[prev_wp] + seg_s * sin(heading);
-
-  double perp_heading = heading - pi() / 2;
-
-  double x = seg_x + d * cos(perp_heading);
-  double y = seg_y + d * sin(perp_heading);
-
-  return {x, y};
-}
-*/
 bool check_xy_blocker(int x, int y, int xmax, int ymax,
                       vector<vector<bool>> map) {
   // Return true if its an ok path
@@ -304,7 +228,7 @@ bool verify_path(path test_path, vector<vector<bool>> map,int max_x,int max_y){
 }
 
 bool check_goal(pos position,int max_y){
-  if(position.y > max_y/2){
+  if(position.y > max_y-2){
     return true;
   }else{
     return false;

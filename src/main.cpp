@@ -78,8 +78,8 @@ int main() {
   // start in lane 1 (as in qa video)
   int lane = 1;
   // reference velocity, less than 50
-  double ref_vel = 0.224;
-  double target_speed=49.5;
+  double ref_vel = 49.5;//0.224;
+ // double target_speed=49.5;&target_speed,
   double max_speed=49.5;
   double d_error=0;
   int stay_lane_counter = 0;
@@ -96,7 +96,7 @@ int main() {
 
   h.onMessage([&ref_vel, &map_waypoints_x, &map_waypoints_y, &map_waypoints_s,
                &map_waypoints_dx, &map_waypoints_dy, &lane, &map, &map_s, &t1,
-               &prev_car_state, &map_2,&predicted_path,&target_speed,&max_speed,
+               &prev_car_state, &map_2,&predicted_path,&max_speed,
                &stay_lane_counter, &d_error](uWS::WebSocket<uWS::SERVER> ws,
                                         char *data, size_t length,
                                         uWS::OpCode opCode) {
@@ -241,16 +241,18 @@ int main() {
           if(!predicted_path.to_goal){
             //same care is blocking us ahead
             closest_car_ahead.distance;
-            target_speed=closest_car_ahead.speed;
+            ref_vel=closest_car_ahead.speed;
+            //calcelate speed to get at distance instead:
+            
             //double target_accel= (v2 − u2 ) / 2s
           }else{
-            target_speed=max_speed;
+            ref_vel=max_speed;
           }
-          if (ref_vel < target_speed-2.7) {
-            ref_vel += 0.5;//244;
-          }else if(ref_vel > target_speed){
-            ref_vel -= 0.5;//0.224;
-          }
+         // if (ref_vel < target_speed-2.7) {
+         //   ref_vel += 0.5;//244;
+         // }else if(ref_vel > target_speed){
+         //   ref_vel -= 0.5;//0.224;
+         // }
           
           
           
@@ -379,23 +381,80 @@ int main() {
           vector<double> next_x_vals;
           vector<double> next_y_vals;
 
+          double prev_pos_x = 0;
+          double prev_jerk = 0;
+          double prev_jerk_x = 0;
+          double prev_accel_x = 0;
+          double prev_accel = 0;
+          double prev_speed_x=0;
+          double prev_speed = 0;
+          
+
+          double t=0.02; // todo, check if the "real" time diff works too
+
           // start with all the prev path pons from last time:
           for (int i = 0; i < previous_path_x.size(); i++) {  // may be  prev_size => previous_path_x.size(); as in qa
-            next_x_vals.push_back(previous_path_x[i]);
-            next_y_vals.push_back(previous_path_y[i]);
+            double b_x = previous_path_x[i];
+            double b_y = previous_path_y[i];
+            next_x_vals.push_back(b_x);
+            next_y_vals.push_back(b_y);
+            
+            double shift_x = b_x - ref_x;
+            double shift_y = b_y - ref_y;
+            b_x = (shift_x * cos(0 - ref_yaw) - shift_y * sin(0 - ref_yaw));
+           // b_y = (shift_x * sin(0 - ref_yaw) + shift_y * cos(0 - ref_yaw));
+
+         //   #double this_speed = sqrt(pow(b_x-prev_pos_x,2)+pow(b_y-prev_pos_y,2))/t;
+            double this_speed_x = (b_x-prev_pos_x)/t;
+            //prev_speed_x = (b_x-prev_pos_x)/t;
+
+            double this_accel_x = (this_speed_x-prev_speed_x);
+            double this_jerk_x = (this_accel_x-prev_accel_x);
+            prev_pos_x = b_x;
+            prev_jerk_x = this_jerk_x;
+            prev_accel_x = this_accel_x;
+            prev_speed_x = this_speed_x;
+            std::cout << ":: from prev accel " << prev_accel_x/t;
           }
+
           double target_x = 30.0;
+         // if(ptsx.size() > 3){
+         //   target_x = ptsx[2];
+         //   std::cout << "using pssx instead of 30.. : "<< target_x << std::endl;
+         // }
           double target_y = s(target_x);
           double target_dist = sqrt((target_x) * (target_x) + (target_y) * (target_y));
 
           double x_add_on = 0;
-          int vel2 = 0;
+          double max_A_x=5;
+          double max_J_x=3;
+          double speed_metric=ref_vel / 2.24;
+          for (int i = 1; i <= 50 - previous_path_x.size(); i++) {
 
-          for (int i = 1; i <= 100 - previous_path_x.size(); i++) {
-          //  if(vel2 < 45)//ref_vel)
-         //     vel2 = car_speed + i*0.5;
-            double N = (target_dist / (.02 * ref_vel / 2.24));
+            //calculate acceleration and jerk here and smooth if needed!
+            double this_max_A_x = prev_accel_x + max_J_x*t;
+            double this_min_A_x = prev_accel_x - max_J_x*t;
+            std::cout << "Given the max jerk, the max acc is " << this_max_A_x << " and min:" << this_min_A_x << ":: from prev accel " << prev_accel_x;
+            this_max_A_x = std::min(this_max_A_x, max_A_x*t);
+            this_min_A_x = std::max(this_min_A_x,-max_A_x*t);
+            std::cout << ", however combined with max A, this is now" << this_max_A_x << " or min " << this_min_A_x << std::endl;
+            double max_speed_x = (prev_speed_x + this_max_A_x); // devided by 2 because we have x and y.
+            double min_speed_x = (prev_speed_x + this_min_A_x);
+            //max_speed = std::min(max_speed,speed_metric);
+            
+            std::cout << "This gives us an max speed of " << max_speed_x << " and min " << min_speed_x;
+            double speed_x = std::max(std::min(max_speed_x,speed_metric),min_speed_x);
+            std::cout << "which makes us drive at " << speed_x << " refV: " << speed_metric << std::endl;
+            
+            double N = (target_dist / (t * speed_x));
             double x_point = x_add_on + (target_x) / N;
+            double v_x = (x_point - prev_pos_x)/t; // in m/s
+            prev_accel_x = (v_x - prev_speed_x)*t;
+            prev_speed_x = v_x;
+            prev_pos_x = x_point;
+
+
+
             double y_point = s(x_point);
 
             x_add_on = x_point;
