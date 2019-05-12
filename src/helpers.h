@@ -157,13 +157,13 @@ vector<double> getFrenet(double x, double y, double theta,
 }
 
 // Transform from Frenet s,d coordinates to Cartesian x,y
-/*vector<double> getXY(double s, double d, const vector<double> &maps_s,
+vector<double> getXY(double s, double d, const vector<double> &maps_s,
                      const vector<double> &maps_x,
                      const vector<double> &maps_y) {
   int prev_wp = -1;
 
   while (s > maps_s[prev_wp + 1] && (prev_wp < (int)(maps_s.size() - 1))) {
-    ++prev_wp;
+    prev_wp++;
   }
 
   int wp2 = (prev_wp + 1) % maps_x.size();
@@ -181,9 +181,9 @@ vector<double> getFrenet(double x, double y, double theta,
   double y = seg_y + d * sin(perp_heading);
 
   return {x, y};
-}*/
-
-vector<double> getXY(double s, double d, const vector<double> &maps_s,
+}
+/*
+vector<double> getXYa(double s, double d, const vector<double> &maps_s,
                      const vector<double> &maps_x,
                      const vector<double> &maps_y) {
 
@@ -214,7 +214,7 @@ vector<double> getXY(double s, double d, const vector<double> &maps_s,
     if(ti<0){
       ti=maps_x.size()+ti;
     }
-    std::cout << ti << " : ";
+    //std::cout << ti << " : ";
     int wp = ti % maps_x.size();
     double this_s = maps_s[wp];
     if (i < 0 && this_s > next_s) {
@@ -256,7 +256,7 @@ vector<double> getXY(double s, double d, const vector<double> &maps_s,
 
   return {x, y};
 }
-
+*/
 bool check_xy_blocker(int x, int y, int xmax, int ymax,
                       vector<vector<bool>> map) {
   // Return true if its an ok path
@@ -508,7 +508,7 @@ path search_path(vector<vector<bool>> map, int lane, path prev_path) {
       }
     }
   }
-  std::cout << "failed to find any path" << std::endl;
+  //std::cout << "failed to find any path" << std::endl;
   /*
   for(auto openit : open_backtrack){
     std::cout << "(" << openit.p.x << "," << openit.p.y << ") f:" <<  openit.f << std::endl;
@@ -575,7 +575,7 @@ vector<vector<bool>> car_2_map(vector<vector<bool>> map, double car_distance,
   double lane_frac = fmod(check_car_d, 4)/4.0;
   int lane2 = lane;
 
-  if (abs(car_distance) < 5 && self_lane != lane){
+  if (abs(car_distance) < 10 && self_lane != lane){
     map[lane][0] = true;
     map[lane][1] = true;
     map[lane][2] = true;
