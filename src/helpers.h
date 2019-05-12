@@ -16,7 +16,7 @@ using std::vector;
 // Checks if the SocketIO event has JSON data.
 // If there is data the JSON object in string format will be returned,
 //   else the empty string "" will be returned.
-int resultion_factor = 7;
+double resultion_factor = 0.5;
 
 string hasData(string s) {
   auto found_null = s.find("null");
@@ -337,8 +337,8 @@ path search_path(vector<vector<bool>> map, int lane, path prev_path) {
   double f = 999;  // no need to calculate
 
   int directions [] = {0,-1, 1};
-  int min_len = 3;
-  int max_len = 5;
+  int min_len = 2;
+  int max_len = 6;
 
   open_item start_position = {f, g, pos {x, y}};
   open_set.push(start_position);
